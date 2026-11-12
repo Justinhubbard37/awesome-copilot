@@ -30,13 +30,22 @@ Ask Copilot to open it and pass your workshop root as `workshopDir`:
 > my `desks/` directory.
 
 `workshopDir` must be the **absolute path to the workshop root** — the folder
-that holds `desks/` (and optionally `classroom/`). If omitted, it falls back to
-the current working directory.
+that holds `desks/` (and optionally `classroom/` or `*-desks/` group folders).
+If omitted, it falls back to the current working directory.
 
 ## Features
 
-- **Signal scanning** — walks `desks/*/.signals/` and `classroom/*/.signals/`,
-  reading the newest `*.json` per desk (mirrors `SignalReader.cs`).
+- **Signal scanning** — walks `desks/*/.signals/`, `classroom/*/.signals/`, and
+  `<group>-desks/*/.signals/`, reading the newest `*.json` per desk.
+- **Desk groups** — besides `desks/`, any top-level folder whose name ends in
+  `-desks` (case-insensitive, for example `team-desks/`) holds desks; dot-folders
+  are skipped. Each desk keeps its folder name for display and gets a unique
+  `deskId` of `<group>/<desk>` (for example `team-desks/forge`), so two groups
+  can each have a `forge` desk. When desks come from more than one folder, the
+  board pins every escalation in an **Escalations** section at the top (labeled
+  by `deskId`), then shows a header per folder, newest signal first; folders
+  with no signals yet follow in scan order (`desks`, `classroom`, then the
+  groups by name). A workshop that only uses `desks/` looks the same as before.
 - **Score bars** — color-coded intent / confidence / accuracy / completeness,
   scored out of 5.
 - **Escalation alerts** — escalation signals sort to the very top, render with a
@@ -46,7 +55,8 @@ the current working directory.
 - **Stash / restore** — pause a workstream by stashing its desk. Stashed desks
   drop off the active view and auto-expire after a **48-hour TTL**; restore any
   time before then. Stash state lives in `.desk-stash.json` at the workshop
-  root.
+  root, keyed by `deskId`. Older entries that hold only a desk name still hide
+  that desk in `desks/` and `classroom/`.
 - **Auto-refresh** — the panel refreshes every 5 seconds using a background
   fetch (no full page reload), so scores and escalations stay current smoothly.
 - **Summary bar** — desk count, how many are reporting vs. awaiting, an
@@ -65,11 +75,16 @@ the current working directory.
 
 The canvas also exposes actions Copilot can invoke directly:
 
-- `refresh` — force a rescan and return current signal data as JSON.
+- `refresh` — force a rescan and return current signal data as JSON, including
+  each desk's `deskName`, `group`, and `deskId`.
 - `stash` — stash a desk by `deskName`.
 - `restore` — restore a stashed desk by `deskName`.
 - `open_desk` — open a desk with optional `profile: "repo" | "connected"` and
-  optional `localDelegation: "off" | "on"`.
+  optional `localDelegation: "off" | "on"`, `model`, `reasoningEffort`, and `context`.
+
+`deskName` accepts a `deskId` such as `team-desks/forge`, or a plain folder name,
+which resolves to the first match in `desks/`, `classroom/`, then the `*-desks/`
+groups in name order.
 
 ## Desk launch profiles
 
@@ -89,6 +104,40 @@ another desk's journal or artifact without receiving access outside the room.
 Set `WORKSHOP_DESK_PROFILE=connected` to retain the historical default for the
 main **open** button. The separate **connected** button is always available when
 repo mode is the default.
+
+## Independent sessions and launch preferences
+
+Every **open** starts a new session with its own UUID. Cairn removes inherited
+Agency/Copilot session identity and log-directory variables from the child
+environment and clears them again inside the terminal command. This also keeps
+an already-running terminal from reconnecting a new desk to its parent's session.
+Existing sessions and their histories are not changed or resumed.
+Terminal cleanup matches variable names case-insensitively, including when a
+running terminal supplies mixed-case state. Linux invokes `/bin/sh` by that name
+so BusyBox shell symlinks keep their applet identity.
+
+When opening the canvas, optionally pass these fields alongside `workshopDir`.
+Both dashboard launch buttons use that panel's selection. The `open_desk` action
+accepts the same fields as overrides for one launch:
+
+| Field | Accepted values |
+| --- | --- |
+| `model` | A Copilot CLI model ID, or `auto` |
+| `reasoningEffort` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` |
+| `context` | `default`, `long_context` |
+
+Selected values become explicit `--model`, `--reasoning-effort`, and `--context`
+arguments for either Agency or plain Copilot, independently of the tool profile
+and Local Delegation. Omitted values remain under Copilot CLI's normal defaults;
+Cairn does not change shared settings or impose a model on other users.
+Invalid selections fail explicitly instead of silently using defaults.
+The `open_desk` action returns validation failures as `{ error: "..." }`, like
+other invalid action inputs. Reopening a panel without preference fields clears
+its previous selection; per-launch overrides do not change the panel selection.
+
+The launch response reports the requested `launchPreferences`. Model availability
+and context capacity depend on the CLI and model: a requested `long_context`
+argument alone is not proof of the effective context window.
 
 ## Local Delegation
 

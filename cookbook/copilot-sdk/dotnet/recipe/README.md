@@ -5,7 +5,7 @@ This folder contains standalone, executable C# examples for each cookbook recipe
 ## Prerequisites
 
 - .NET 10.0 or later
-- GitHub Copilot SDK package (referenced automatically)
+- Microsoft Copilot SDK NuGet package, currently published as `GitHub.Copilot.SDK` (referenced automatically)
 
 ## Running Examples
 
@@ -26,6 +26,7 @@ dotnet run <filename>.cs
 | Persisting Sessions  | `dotnet run persisting-sessions.cs`  | Save and resume sessions across restarts   |
 | Accessibility Report ℹ️ | `dotnet run accessibility-report.cs` | Analyzes web page accessibility            |
 | Ralph Loop ⚠️         | `dotnet run ralph-loop.cs`           | Autonomous development loop                |
+| In-Process Runtime   | `dotnet run in-process-runtime.cs`  | Runs the Copilot runtime in-process         |
 
 ### Examples with Arguments
 
@@ -184,5 +185,5 @@ These examples use .NET's file-based app feature, which allows single-file C# pr
 ## Learning Resources
 
 - [.NET File-Based Apps Documentation](https://learn.microsoft.com/en-us/dotnet/core/sdk/file-based-apps)
-- [GitHub Copilot SDK Documentation](https://github.com/github/copilot-sdk/blob/main/dotnet/README.md)
+- [Microsoft Copilot SDK for .NET documentation](https://github.com/github/copilot-sdk/blob/main/dotnet/README.md)
 - [Parent Cookbook](../README.md)

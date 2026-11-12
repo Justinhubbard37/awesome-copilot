@@ -48,12 +48,28 @@ jobs:
             core.setOutput('issue-labels', JSON.stringify(labels));
             core.setOutput('should-sync', (!isApproved && !isClosedWithoutReopen) ? 'true' : 'false');
 
+      - name: Mark submission as awaiting review
+        if: steps.guard.outputs.should-sync == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const path = require('path');
+            const { pathToFileURL } = require('url');
+            const intakeState = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, '.github', 'scripts', 'external-plugins', 'external-plugin-intake-state.mjs')).href);
+
+            await intakeState.markExternalPluginIntakeAwaitingReview({
+              github,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issueNumber: context.issue.number
+            });
+
       - name: Evaluate submission
         id: evaluation
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          result=$(node ./eng/external-plugin-intake.mjs "$GITHUB_EVENT_PATH" "${{ github.run_id }}" "${{ github.repository_owner }}" "${{ github.event.repository.name }}")
+          result=$(node ./.github/scripts/external-plugins/external-plugin-intake.mjs "$GITHUB_EVENT_PATH" "${{ github.run_id }}" "${{ github.repository_owner }}" "${{ github.event.repository.name }}")
           {
             echo 'result<<EOF'
             echo "$result"
@@ -94,6 +110,7 @@ jobs:
           BASE_RESULT_JSON: ${{ needs.evaluate-submission.outputs.evaluation }}
           BASE_VALID: ${{ needs.evaluate-submission.outputs.valid }}
           QUALITY_RESULT_JSON: ${{ needs.quality-gates.outputs.quality-result }}
+          QUALITY_LOG_URL: ${{ needs.quality-gates.outputs.quality-log-url }}
           QUALITY_JOB_RESULT: ${{ needs.quality-gates.result }}
           ISSUE_STATE: ${{ needs.evaluate-submission.outputs.issue-state }}
           ISSUE_LABELS: ${{ needs.evaluate-submission.outputs.issue-labels }}
@@ -102,8 +119,8 @@ jobs:
             const path = require('path');
             const { pathToFileURL } = require('url');
 
-            const intake = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, 'eng', 'external-plugin-intake.mjs')).href);
-            const intakeState = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, 'eng', 'external-plugin-intake-state.mjs')).href);
+            const intake = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, '.github', 'scripts', 'external-plugins', 'external-plugin-intake.mjs')).href);
+            const intakeState = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, '.github', 'scripts', 'external-plugins', 'external-plugin-intake-state.mjs')).href);
 
             const baseResult = JSON.parse(process.env.BASE_RESULT_JSON);
             let finalResult = baseResult;
@@ -113,7 +130,7 @@ jobs:
               if (process.env.QUALITY_JOB_RESULT === 'failure' || process.env.QUALITY_JOB_RESULT === 'cancelled') {
                 qualityResult = {
                   overall_status: 'infra_error',
-                  spec_compliance_status: 'warning',
+                  spec_compliance_status: 'infra_error',
                   vally_lint_status: 'infra_error',
                   smoke_status: 'infra_error',
                   version_match_status: 'infra_error',
@@ -126,7 +143,7 @@ jobs:
               } else {
                 qualityResult = {
                   overall_status: 'infra_error',
-                  spec_compliance_status: 'warning',
+                  spec_compliance_status: 'infra_error',
                   vally_lint_status: 'infra_error',
                   smoke_status: 'infra_error',
                   version_match_status: 'infra_error',
@@ -136,7 +153,14 @@ jobs:
                 };
               }
 
-              finalResult = intake.applyQualityGateResult(baseResult, qualityResult, context.runId, context.repo.owner, context.repo.repo);
+              finalResult = intake.applyQualityGateResult(
+                baseResult,
+                qualityResult,
+                context.runId,
+                context.repo.owner,
+                context.repo.repo,
+                process.env.QUALITY_LOG_URL
+              );
             }
 
             await intakeState.applyExternalPluginIntakeEvaluation({

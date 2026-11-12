@@ -1,0 +1,331 @@
+import { ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "@primer/octicons-react";
+import { clsx } from "clsx";
+import React from "react";
+
+import { Box, Breadcrumbs, Heading, Section, Text } from "@primer/react-brand";
+
+import { PageShell } from "./PageShell";
+import { LargeFooter } from "./LargeFooter";
+import { ReadingHeader } from "./ReadingHeader";
+import type { AwesomeCopilotPage } from "./navigation";
+import { getScrollBehavior } from "./scrollBehavior";
+import type { SearchItem } from "./searchIndex";
+import styles from "./styles/dotnet-upgrade.module.css";
+import {
+  useAgentDetailHeroPin,
+  useAgentDetailProgress,
+  useReadingScrollSpy,
+} from "./useAgentDetailScroll";
+import type { DetailTocItem } from "../../lib/detail-toc";
+
+export { buildDetailToc } from "../../lib/detail-toc";
+export type { DetailTocItem } from "../../lib/detail-toc";
+
+export type DetailCrumb = {
+  label: string;
+  /** Omitted for the trailing (current) crumb. */
+  href?: string;
+};
+
+export type DetailSibling = { label: string; href: string };
+
+export type DetailChassisProps = {
+  /** Resource name — the hero `<h1>`. */
+  title: string;
+  /** One-line summary under the hero title. */
+  description?: string;
+  /** Trail rendered in the hero. The last entry is marked as the current page. */
+  breadcrumbs: DetailCrumb[];
+  /** Hero action row: install split-button, source/download buttons, etc. */
+  install?: React.ReactNode;
+  /** The primary install action, sized for the compact reading header. */
+  compactInstall?: React.ReactNode;
+  /** Extra hero content rendered under the description (e.g. `applyTo` tokens). */
+  heroExtras?: React.ReactNode;
+  /** "In this article" entries; ids must exist in the content region. */
+  toc?: DetailTocItem[];
+  /** Extra sidebar panels rendered under the table of contents. */
+  sidebar?: React.ReactNode;
+  previous?: DetailSibling;
+  next?: DetailSibling;
+  /** Catalog tab to mark current in the top nav. */
+  currentPage?: AwesomeCopilotPage;
+  searchIndex?: SearchItem[];
+  contributorsTotal?: number;
+  /** Main content region — markdown body, capability lists, file trees, … */
+  children: React.ReactNode;
+};
+
+/**
+ * Shared shell for every resource detail route.
+ *
+ * Breadcrumbs and an expanded hero scroll into a compact reading title with a
+ * progress rule, above a two-column body whose sidebar holds the
+ * in-page table of contents, sibling navigation, and a back-to-top control —
+ * all inside the site-wide `PageShell` chrome.
+ *
+ * Everything type-specific (install affordances, metadata panels, the content
+ * region itself) arrives through props so the five resource types can differ
+ * without forking this file.
+ */
+export function DetailChassis({
+  title,
+  description,
+  breadcrumbs,
+  install,
+  compactInstall,
+  heroExtras,
+  toc = [],
+  sidebar,
+  previous,
+  next,
+  currentPage,
+  searchIndex,
+  contributorsTotal,
+  children,
+}: DetailChassisProps) {
+  const contentScrollRef = React.useRef<HTMLDivElement>(null);
+  const [showBackToTop, setShowBackToTop] = React.useState(false);
+  const [heroBurst, setHeroBurst] = React.useState(false);
+  const [activeSection, setActiveSection] = React.useState(toc[0]?.id ?? "");
+
+  const pinnedHeight = useAgentDetailHeroPin(contentScrollRef, {
+    hero: styles.hero,
+    heroInner: styles.heroInner,
+  });
+  const scrollToTop = useAgentDetailProgress(
+    contentScrollRef,
+    setShowBackToTop,
+    setHeroBurst,
+  );
+
+  useScrollHostLayout(contentScrollRef);
+  useReadingScrollSpy(contentScrollRef, toc, pinnedHeight, setActiveSection);
+
+  const progressRider = (
+    <div className={styles.progressViewport} aria-hidden="true">
+      <div className={styles.progressRider} data-burst={heroBurst ? "true" : undefined}>
+        <span className={styles.progressDuck} />
+        <span className={styles.confetti}>
+          {Array.from({ length: 14 }).map((_, i) => (
+            <i key={i} className={styles.confettiPiece} />
+          ))}
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <PageShell
+      styles={styles}
+      currentPage={currentPage}
+      searchIndex={searchIndex}
+      contributorsTotal={contributorsTotal}
+      renderFooter={false}
+    >
+      <div className={styles.scrollHost} ref={contentScrollRef}>
+        <ReadingHeader title={title} className={styles.readingHeader} action={compactInstall}>
+          {progressRider}
+        </ReadingHeader>
+        <Box as="section" className={clsx(styles.hero, "heading-texture")}>
+          <Section paddingBlockStart="none" paddingBlockEnd="none">
+            <div className={styles.heroInner}>
+              <div className={styles.heroBreadcrumbs}>
+                <Breadcrumbs>
+                  {breadcrumbs.map((crumb, index) => {
+                    const selected = index === breadcrumbs.length - 1;
+                    return (
+                      <Breadcrumbs.Item
+                        key={`${crumb.label}-${index}`}
+                        href={crumb.href ?? "#"}
+                        selected={selected}
+                      >
+                        {index === 0 ? (
+                          <ArrowLeftIcon
+                            size={16}
+                            className={styles.heroBreadcrumbBackIcon}
+                          />
+                        ) : null}
+                        {crumb.label}
+                      </Breadcrumbs.Item>
+                    );
+                  })}
+                </Breadcrumbs>
+              </div>
+              <div className={styles.heroContent}>
+                <Heading as="h1" size="4">
+                  {title}
+                </Heading>
+                {description ? (
+                  <Text
+                    as="p"
+                    size="200"
+                    variant="muted"
+                    className={styles.heroDescription}
+                  >
+                    {description}
+                  </Text>
+                ) : null}
+                {heroExtras}
+                {install ? (
+                  <div className={styles.heroActions} data-hero-actions>{install}</div>
+                ) : null}
+              </div>
+            </div>
+          </Section>
+          {progressRider}
+        </Box>
+        <Box as="section" className={styles.body}>
+          <Section paddingBlockStart="none" paddingBlockEnd="none">
+            <div className={styles.bodyInner}>
+              <div className={styles.layout}>
+                <article className={styles.contentCol} data-reading-content>{children}</article>
+
+                <aside className={styles.sidebarCol}>
+                  <div className={styles.sidebarSticky}>
+                    {toc.length > 0 ? (
+                      <div className={styles.sidebarSection}>
+                        <div className={styles.sidebarSummary}>
+                          <span className={styles.sidebarKicker}>
+                            In this article
+                          </span>
+                        </div>
+                        <nav className={styles.toc} aria-label="In this article">
+                          <ul className={styles.tocList}>
+                            {toc.map((section) => (
+                              <li key={section.id}>
+                                <a
+                                  href={`#${section.id}`}
+                                  className={clsx(
+                                    styles.tocLink,
+                                    activeSection === section.id &&
+                                      styles.tocLinkActive,
+                                  )}
+                                  aria-current={
+                                    activeSection === section.id
+                                      ? "true"
+                                      : undefined
+                                  }
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    document
+                                      .getElementById(section.id)
+                                      ?.scrollIntoView({
+                                        behavior: getScrollBehavior(),
+                                        block: "start",
+                                      });
+                                    setActiveSection(section.id);
+                                  }}
+                                >
+                                  {section.label}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </nav>
+                      </div>
+                    ) : null}
+                    {sidebar}
+                  </div>
+                </aside>
+              </div>
+              {previous || next ? (
+                <aside className={styles.nextUp} aria-label="More like this">
+                  {previous ? (
+                    <div className={styles.nextUpMain}>
+                      <div className={styles.nextUpKickerRow}>
+                        <span className={styles.nextUpKicker}>Previous</span>
+                      </div>
+                      <a href={previous.href} className={styles.nextUpLink}>
+                        <ArrowLeftIcon
+                          size={16}
+                          className={styles.nextUpArrow}
+                        />
+                        {previous.label}
+                      </a>
+                    </div>
+                  ) : null}
+                  {next ? (
+                    <div
+                      className={clsx(styles.nextUpMain, styles.nextUpNext)}
+                    >
+                      <div className={styles.nextUpKickerRow}>
+                        <span className={styles.nextUpKicker}>Up next</span>
+                      </div>
+                      <a href={next.href} className={styles.nextUpLink}>
+                        {next.label}
+                        <ArrowRightIcon
+                          size={16}
+                          className={styles.nextUpArrow}
+                        />
+                      </a>
+                    </div>
+                  ) : null}
+                </aside>
+              ) : null}
+            </div>
+          </Section>
+        </Box>
+        <LargeFooter />
+      </div>
+      <button
+        type="button"
+        className={clsx(
+          styles.backToTop,
+          showBackToTop && styles.backToTopVisible,
+        )}
+        onClick={scrollToTop}
+        aria-label="Back to top"
+        aria-hidden={!showBackToTop}
+        tabIndex={showBackToTop ? 0 : -1}
+      >
+        <ArrowUpIcon size={24} />
+      </button>
+    </PageShell>
+  );
+}
+
+/**
+ * The prototype nested the scroll region directly inside `.page`; under
+ * `PageShell` it sits one level deeper, inside the `<main>` landmark. Make that
+ * landmark a transparent flex pass-through so the measured 100vh scroll region
+ * still resolves, and mirror the hero-pin flag the scroll hook writes onto it
+ * back up to `.page`, which is what the stylesheet keys off.
+ */
+function useScrollHostLayout(
+  contentScrollRef: React.RefObject<HTMLDivElement | null>,
+) {
+  React.useLayoutEffect(() => {
+    const host = contentScrollRef.current;
+    const landmark = host?.parentElement;
+    if (!host || !landmark) return;
+
+    landmark.style.display = "flex";
+    landmark.style.flexDirection = "column";
+    landmark.style.flex = "1 1 auto";
+    landmark.style.minHeight = "0";
+
+    const page = landmark.parentElement;
+    if (!page) return;
+
+    // The scroll hooks write their measurements to the scroll host's parent.
+    // Republish them on `.page`, which the stylesheet's selectors key off.
+    const mirror = () => {
+      const pin = landmark.dataset.heroPin;
+      if (pin === undefined) delete page.dataset.heroPin;
+      else page.dataset.heroPin = pin;
+      for (const name of Array.from(landmark.style)) {
+        if (name.startsWith("--dotnet-")) {
+          page.style.setProperty(name, landmark.style.getPropertyValue(name));
+        }
+      }
+    };
+    mirror();
+    const observer = new MutationObserver(mirror);
+    observer.observe(landmark, {
+      attributes: true,
+      attributeFilter: ["data-hero-pin", "style"],
+    });
+    return () => observer.disconnect();
+  }, [contentScrollRef]);
+}
